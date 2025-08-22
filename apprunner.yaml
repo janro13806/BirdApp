@@ -3,9 +3,9 @@ version: 1.0
 runtime: python311
 
 build:
-  commands:
-    - pip install --upgrade pip
-    - pip install --no-cache-dir -r requirements.txt
+  command: |
+    pip install --upgrade pip
+    pip install --no-cache-dir -r requirements.txt
 
 run:
   runtime-version: 3.11
