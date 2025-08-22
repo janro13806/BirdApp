@@ -8,7 +8,6 @@ build:
 
     # required, these commands compile or install dependencies
     build:
-      - pip install --upgrade pip
       - pip install --no-cache-dir -r requirements.txt
 
     # optional, run after your build step
