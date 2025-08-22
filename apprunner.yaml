@@ -7,6 +7,8 @@ build:
   commands:
     - pip3 install --upgrade pip
     - pip3 install --no-cache-dir -r requirements.txt
+    - pip3 install gunicorn
+
 
 run:
   # Use the managed Python 3.11 runtime and start your app
