@@ -3,15 +3,13 @@ version: 1.0
 runtime: python311
 
 build:
-  # Phase 1: Upgrade pip, switch to pip3, avoid caching
   commands:
-    - pip3 install --upgrade pip
+    - pip install --upgrade pip
+    - pip install --no-cache-dir -r requirements.txt
 
 run:
-  # Use the managed Python 3.11 runtime and start your app
   runtime-version: 3.11
   command: gunicorn application:app --bind 0.0.0.0:8080 --timeout 120 --workers 1
 
 network:
   port: 8080
- 
