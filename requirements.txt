@@ -1,6 +1,12 @@
-flask
-transformers
-torch
-Pillow
-requests
-gunicorn
+flask==3.0.3
+gunicorn==23.0.0
+
+# Keep transformers + hub on versions that work with the managed runtime’s OpenSSL
+transformers==4.35.2
+huggingface-hub==0.19.4
+
+# CPU PyTorch that works well on App Runner
+torch==2.1.2
+
+Pillow==10.4.0
+requests==2.32.3
