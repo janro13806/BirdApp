@@ -31,15 +31,6 @@ def health():
         "auth": "present" if HF_TOKEN else "missing"
     }), 200
 
-def _largest_instance_bbox(instances: list) -> Optional[Dict[str, float]]:
-    if not instances:
-        return None
-    return max(
-        instances,
-        key=lambda i: i.get("BoundingBox", {}).get("Width", 0) *
-                      i.get("BoundingBox", {}).get("Height", 0)
-    ).get("BoundingBox")
-
 def _rek():
     # lazy client; created only when /VerifyBirdImage is hit
     return boto3.client("rekognition", region_name=AWS_REGION)
@@ -47,7 +38,8 @@ def _rek():
 def _verify_with_rekognition(image_bytes: bytes) -> Tuple[Dict[str, Any], int]:
     """
     Check with Amazon Rekognition if the image contains a bird.
-    Returns ({ok,label,confidence,box?}, http_status).
+    Returns (uniform_body, http_status).
+    uniform_body keys: ok, label, confidence, message, error
     """
     try:
         resp = _rek().detect_labels(
@@ -56,10 +48,16 @@ def _verify_with_rekognition(image_bytes: bytes) -> Tuple[Dict[str, Any], int]:
             MinConfidence=int(BIRD_MIN_CONF * 100)
         )
     except Exception as e:
-        return {"error": "rekognition_error", "detail": str(e)}, 502
+        return {
+            "ok": False,
+            "label": None,
+            "confidence": 0.0,
+            "message": str(e),
+            "error": "rekognition_error"
+        }, 502
 
     labels = resp.get("Labels", [])
-    best_conf, best_name, best_box = 0.0, None, None
+    best_conf, best_name = 0.0, None
 
     for lab in labels:
         name = lab.get("Name", "")
@@ -68,23 +66,22 @@ def _verify_with_rekognition(image_bytes: bytes) -> Tuple[Dict[str, Any], int]:
         is_birdish = name.lower() == "bird" or "bird" in parents  # e.g., "Swallow", "Jay"
         if is_birdish and conf > best_conf:
             best_conf, best_name = conf, name
-            best_box = _largest_instance_bbox(lab.get("Instances", [])) or best_box
 
     if best_name and best_conf >= BIRD_MIN_CONF:
-        out = {"ok": True, "label": best_name, "confidence": best_conf}
-        if best_box:
-            out["box"] = {
-                "left":  best_box["Left"],
-                "top":   best_box["Top"],
-                "width": best_box["Width"],
-                "height":best_box["Height"],
-            }
-        return out, 200
+        return {
+            "ok": True,
+            "label": best_name,
+            "confidence": best_conf,
+            "message": "",
+            "error": None
+        }, 200
 
     return {
         "ok": False,
-        "error": "not_bird",
-        "message": f"Doesn’t look like a bird (max confidence {best_conf:.2f}). Try a closer, sharper photo."
+        "label": None,
+        "confidence": best_conf,
+        "message": f"Doesn’t look like a bird (max confidence {best_conf:.2f}). Try a closer, sharper photo.",
+        "error": "not_bird"
     }, 422
 
 @app.route("/VerifyBirdImage", methods=["POST"])
