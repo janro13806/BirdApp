@@ -2,7 +2,7 @@ from flask import Flask, request, jsonify
 import os, requests, time, io
 from PIL import Image
 import boto3
-from typing import Tuple, Dict, Any
+from typing import Tuple, Dict, Any, Optional
 
 MODEL_ID = os.environ.get("MODEL_ID", "chriamue/bird-species-classifier")
 HF_TOKEN = os.environ.get("HF_TOKEN")  # set this in App Runner
@@ -10,7 +10,6 @@ API_URL = f"https://api-inference.huggingface.co/models/{MODEL_ID}"
 
 AWS_REGION = os.getenv("AWS_REGION", "eu-west-1")
 BIRD_MIN_CONF = float(os.getenv("BIRD_MIN_CONF", "0.85"))
-rek = boto3.client("rekognition", region_name=AWS_REGION)
 
 # Proper headers for binary upload + better DX on cold start
 HEADERS = {
@@ -32,7 +31,7 @@ def health():
         "auth": "present" if HF_TOKEN else "missing"
     }), 200
 
-def _largest_instance_bbox(instances: list) -> Dict[str, float] | None:
+def _largest_instance_bbox(instances: list) -> Optional[Dict[str, float]]:
     if not instances:
         return None
     return max(
@@ -41,13 +40,17 @@ def _largest_instance_bbox(instances: list) -> Dict[str, float] | None:
                       i.get("BoundingBox", {}).get("Height", 0)
     ).get("BoundingBox")
 
+def _rek():
+    # lazy client; created only when /VerifyBirdImage is hit
+    return boto3.client("rekognition", region_name=AWS_REGION)
+
 def _verify_with_rekognition(image_bytes: bytes) -> Tuple[Dict[str, Any], int]:
     """
     Check with Amazon Rekognition if the image contains a bird.
     Returns ({ok,label,confidence,box?}, http_status).
     """
     try:
-        resp = rek.detect_labels(
+        resp = _rek().detect_labels(
             Image={"Bytes": image_bytes},
             MaxLabels=25,
             MinConfidence=int(BIRD_MIN_CONF * 100)
