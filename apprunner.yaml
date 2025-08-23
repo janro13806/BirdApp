@@ -2,21 +2,12 @@ version: 1.0
 runtime: python311
 
 build:
-  commands:
-    # optional steps before installing dependencies
-    pre-build: []
-
-    # install your Python dependencies
-    build:
-      - pip install -r requirements.txt
+  command: |
+    pip install --no-cache-dir -r requirements.txt
 
 run:
   runtime-version: 3.11
+  command: gunicorn service:app --bind 0.0.0.0:8080 --timeout 120 --workers 1
 
-  # how App Runner launches your service
-  command: gunicorn application:app --bind 0.0.0.0:8080 --timeout 120 --workers 1
-
-  network:
-    # container port and the env var mapped to it
-    port: 8080
-    env: APP_PORT
+network:
+  port: 8080
