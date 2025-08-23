@@ -1,6 +1,6 @@
 flask
-gunicorn
 transformers
 torch
 Pillow
 requests
+uvicorn[standard]
