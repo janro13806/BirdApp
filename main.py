@@ -1,10 +1,16 @@
 from flask import Flask, request, jsonify
 import os, requests, time, io
 from PIL import Image
+import boto3
+from typing import Tuple, Dict, Any
 
 MODEL_ID = os.environ.get("MODEL_ID", "chriamue/bird-species-classifier")
 HF_TOKEN = os.environ.get("HF_TOKEN")  # set this in App Runner
 API_URL = f"https://api-inference.huggingface.co/models/{MODEL_ID}"
+
+AWS_REGION = os.getenv("AWS_REGION", "eu-west-1")
+BIRD_MIN_CONF = float(os.getenv("BIRD_MIN_CONF", "0.85"))
+rek = boto3.client("rekognition", region_name=AWS_REGION)
 
 # Proper headers for binary upload + better DX on cold start
 HEADERS = {
@@ -26,6 +32,73 @@ def health():
         "auth": "present" if HF_TOKEN else "missing"
     }), 200
 
+def _largest_instance_bbox(instances: list) -> Dict[str, float] | None:
+    if not instances:
+        return None
+    return max(
+        instances,
+        key=lambda i: i.get("BoundingBox", {}).get("Width", 0) *
+                      i.get("BoundingBox", {}).get("Height", 0)
+    ).get("BoundingBox")
+
+def _verify_with_rekognition(image_bytes: bytes) -> Tuple[Dict[str, Any], int]:
+    """
+    Check with Amazon Rekognition if the image contains a bird.
+    Returns ({ok,label,confidence,box?}, http_status).
+    """
+    try:
+        resp = rek.detect_labels(
+            Image={"Bytes": image_bytes},
+            MaxLabels=25,
+            MinConfidence=int(BIRD_MIN_CONF * 100)
+        )
+    except Exception as e:
+        return {"error": "rekognition_error", "detail": str(e)}, 502
+
+    labels = resp.get("Labels", [])
+    best_conf, best_name, best_box = 0.0, None, None
+
+    for lab in labels:
+        name = lab.get("Name", "")
+        conf = float(lab.get("Confidence", 0.0)) / 100.0
+        parents = {p.get("Name", "").lower() for p in lab.get("Parents", [])}
+        is_birdish = name.lower() == "bird" or "bird" in parents  # e.g., "Swallow", "Jay"
+        if is_birdish and conf > best_conf:
+            best_conf, best_name = conf, name
+            best_box = _largest_instance_bbox(lab.get("Instances", [])) or best_box
+
+    if best_name and best_conf >= BIRD_MIN_CONF:
+        out = {"ok": True, "label": best_name, "confidence": best_conf}
+        if best_box:
+            out["box"] = {
+                "left":  best_box["Left"],
+                "top":   best_box["Top"],
+                "width": best_box["Width"],
+                "height":best_box["Height"],
+            }
+        return out, 200
+
+    return {
+        "ok": False,
+        "error": "not_bird",
+        "message": f"Doesn’t look like a bird (max confidence {best_conf:.2f}). Try a closer, sharper photo."
+    }, 422
+
+@app.post("/VerifyBirdImage")
+def verify_bird_image():
+    if "file" not in request.files:
+        return jsonify({"error": "No file uploaded. Use form-data with key 'file'."}), 400
+
+    image_bytes = request.files["file"].read()
+
+    # basic image sanity check
+    try:
+        Image.open(io.BytesIO(image_bytes)).verify()
+    except Exception:
+        return jsonify({"error": "Invalid image data"}), 400
+
+    payload, code = _verify_with_rekognition(image_bytes)
+    return jsonify(payload), code
 
 def call_hf_inference(image_bytes: bytes, retries: int = 3, timeout: int = 60):
     """
