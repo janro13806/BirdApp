@@ -3,4 +3,4 @@ transformers
 torch
 Pillow
 requests
-uvicorn[standard]
+gunicorn
