@@ -3,3 +3,4 @@ gunicorn
 Pillow
 requests
 urllib3==1.26.18
+boto3
