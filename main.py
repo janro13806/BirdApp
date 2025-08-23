@@ -84,14 +84,14 @@ def _verify_with_rekognition(image_bytes: bytes) -> Tuple[Dict[str, Any], int]:
         "message": f"Doesn’t look like a bird (max confidence {best_conf:.2f}). Try a closer, sharper photo."
     }, 422
 
-@app.post("/VerifyBirdImage")
+@app.route("/VerifyBirdImage", methods=["POST"])
+@app.route("/verifybirdimage", methods=["POST"])      # lowercase alias
+@app.route("/verify-bird-image", methods=["POST"])    # kebab alias
 def verify_bird_image():
     if "file" not in request.files:
         return jsonify({"error": "No file uploaded. Use form-data with key 'file'."}), 400
 
     image_bytes = request.files["file"].read()
-
-    # basic image sanity check
     try:
         Image.open(io.BytesIO(image_bytes)).verify()
     except Exception:
@@ -99,6 +99,10 @@ def verify_bird_image():
 
     payload, code = _verify_with_rekognition(image_bytes)
     return jsonify(payload), code
+
+@app.get("/__routes")
+def list_routes():
+    return jsonify(sorted([(r.rule, sorted(list(r.methods))) for r in app.url_map.iter_rules()]))
 
 def call_hf_inference(image_bytes: bytes, retries: int = 3, timeout: int = 60):
     """
