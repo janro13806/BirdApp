@@ -97,8 +97,9 @@ def verify_bird_image():
     except Exception:
         return jsonify({"error": "Invalid image data"}), 400
 
-    payload, code = _verify_with_rekognition(image_bytes)
-    return jsonify(payload), code
+    payload, _ = _verify_with_rekognition(image_bytes)
+    # Always HTTP 200 for business outcomes; client inspects payload["ok"]
+    return jsonify(payload), 200
 
 @app.get("/__routes")
 def list_routes():
