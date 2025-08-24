@@ -9,7 +9,7 @@ HF_TOKEN = os.environ.get("HF_TOKEN")  # set this in App Runner
 API_URL = f"https://api-inference.huggingface.co/models/{MODEL_ID}"
 
 AWS_REGION = os.getenv("AWS_REGION", "eu-west-1")
-BIRD_MIN_CONF = float(os.getenv("BIRD_MIN_CONF", "0.60"))
+BIRD_MIN_CONF = float(os.getenv("BIRD_MIN_CONF", "0.85"))
 
 # Proper headers for binary upload + better DX on cold start
 HEADERS = {
